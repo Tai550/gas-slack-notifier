@@ -33,16 +33,20 @@ function reportYesterdayMentions(): void {
         return;
     }
 
-    // --- 期間の設定（昨日） ---
-    const yesterday = new Date();
-    yesterday.setDate(yesterday.getDate() - 1);
+    // --- 期間の設定（昨日 0:00 〜 23:59） ---
+    const now = new Date();
+    const yesterday = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 1);
+    const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+
     const dateString = Utilities.formatDate(yesterday, 'Asia/Tokyo', 'yyyy-MM-dd');
+    const todayString = Utilities.formatDate(today, 'Asia/Tokyo', 'yyyy-MM-dd');
 
     // --- 検索クエリの作成 ---
-    // 例: "to:<USER_ID> after:2024-01-01 before:2024-01-02"
-    const query = `to:<@${userId}> after:${dateString}`;
+    // 精度向上のため "to:<@ID>" ではなく "<@ID>" で検索し、日付を厳密に指定
+    const query = `<@${userId}> after:${dateString} before:${todayString}`;
+    Logger.log(`Search Query: ${query}`);
 
-    // --- Slack検索APIの実行 ---
+    // --- Slack検索APIの実行（ページネーション対応） ---
     const messages = searchSlackMessages(userToken, query);
 
     if (messages.length === 0) {
@@ -70,25 +74,42 @@ function reportYesterdayMentions(): void {
 // ============================================================
 
 /**
- * Slack Search API を使用してメッセージを検索する。
+ * Slack Search API を使用してメッセージを検索する（全ページ取得）。
  */
 function searchSlackMessages(token: string, query: string): any[] {
-    const url = `https://slack.com/api/search.messages?query=${encodeURIComponent(query)}&count=100`;
-    const options: GoogleAppsScript.URL_Fetch.URLFetchRequestOptions = {
-        method: 'get',
-        headers: { Authorization: `Bearer ${token}` },
-        muteHttpExceptions: true,
-    };
+    let allMessages: any[] = [];
+    let page = 1;
+    let pageCount = 1;
 
-    const response = UrlFetchApp.fetch(url, options);
-    const resJson = JSON.parse(response.getContentText());
+    do {
+        const url = `https://slack.com/api/search.messages?query=${encodeURIComponent(query)}&count=100&page=${page}`;
+        const options: GoogleAppsScript.URL_Fetch.URLFetchRequestOptions = {
+            method: 'get',
+            headers: { Authorization: `Bearer ${token}` },
+            muteHttpExceptions: true,
+        };
 
-    if (!resJson.ok) {
-        Logger.log(`Slack API Error: ${resJson.error}`);
-        return [];
-    }
+        const response = UrlFetchApp.fetch(url, options);
+        const resJson = JSON.parse(response.getContentText());
 
-    return resJson.messages.matches || [];
+        if (!resJson.ok) {
+            Logger.log(`Slack API Error: ${resJson.error}`);
+            break;
+        }
+
+        const matches = resJson.messages.matches || [];
+        allMessages = allMessages.concat(matches);
+
+        pageCount = resJson.messages.pagination.page_count;
+        page++;
+
+        // API制限を考慮し、極端に多い場合は5ページ（500件）で切り上げる
+        if (page > 5) break;
+
+    } while (page <= pageCount);
+
+    Logger.log(`Total mentions found: ${allMessages.length}`);
+    return allMessages;
 }
 
 /**
@@ -99,7 +120,9 @@ function aggregateMentions(messages: any[]): { id: string; name: string }[] {
 
     messages.forEach((msg) => {
         if (msg.channel && msg.channel.id) {
-            channelMap.set(msg.channel.id, msg.channel.name);
+            // チャンネル名が取得できない（プライベートチャンネル等）場合への配慮
+            const channelName = msg.channel.name || 'private-channel';
+            channelMap.set(msg.channel.id, channelName);
         }
     });
 
@@ -108,7 +131,8 @@ function aggregateMentions(messages: any[]): { id: string; name: string }[] {
         list.push({ id, name });
     });
 
-    return list;
+    // チャンネル名でソート
+    return list.sort((a, b) => a.name.localeCompare(b.name));
 }
 
 // ============================================================
