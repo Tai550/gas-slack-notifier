@@ -42,9 +42,8 @@ function reportYesterdayMentions(): void {
     const todayString = Utilities.formatDate(today, 'Asia/Tokyo', 'yyyy-MM-dd');
 
     // --- 検索クエリの作成 ---
-    // hit率を高めるため Slack 標準の "to:me" と ID指定を併用したクエリを試行
-    // デバッグのため複数のクエリパターンを試せるように構成（今回は to:me を重視）
-    const query = `to:me after:${dateString} before:${todayString}`;
+    // hit率を最大化するため、"to:me"（自分宛）と "<@UserID>"（メンション文字列）のOR検索を行います
+    const query = `(to:me OR <@${userId}>) after:${dateString} before:${todayString}`;
     Logger.log(`[DEBUG] Search Query Initiated: ${query}`);
 
     // --- Slack検索APIの実行（ページネーション対応） ---
