@@ -39,7 +39,23 @@ function sendSlackNotification(): void {
   }
 
   // --- スプレッドシートからデータ取得 ---
-  const sheet = SpreadsheetApp.openById(SPREADSHEET_ID).getSheetByName(SHEET_NAME);
+  if (SPREADSHEET_ID === 'YOUR_SPREADSHEET_ID_HERE') {
+    Logger.log(
+      'エラー: SPREADSHEET_ID が設定されていません。\n' +
+      'src/SlackNotifier.ts の SPREADSHEET_ID に、対象スプレッドシートのIDを記入して再度プッシュしてください。',
+    );
+    return;
+  }
+
+  let sheet: GoogleAppsScript.Spreadsheet.Sheet | null = null;
+  try {
+    sheet = SpreadsheetApp.openById(SPREADSHEET_ID).getSheetByName(SHEET_NAME);
+  } catch (e) {
+    Logger.log(
+      `エラー: スプレッドシートの取得に失敗しました。IDが正しいか、権限があるか確認してください。\n詳細: ${e}`,
+    );
+    return;
+  }
 
   if (!sheet) {
     Logger.log(`エラー: シート "${SHEET_NAME}" が見つかりません。`);
