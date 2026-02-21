@@ -42,8 +42,8 @@ function reportYesterdayMentions(): void {
     const todayString = Utilities.formatDate(today, 'Asia/Tokyo', 'yyyy-MM-dd');
 
     // --- 検索クエリの作成 ---
-    // hit率を最大化するため、"to:me"（自分宛）と "<@UserID>"（メンション文字列）のOR検索を行います
-    const query = `(to:me OR <@${userId}>) after:${dateString} before:${todayString}`;
+    // hit率を最大化するため、"to:me"（自分宛）、"<@UserID>"（メンション文字列）、および名前の直接入力をOR検索します
+    const query = `(to:me OR <@${userId}> OR "Taichi Yoda" OR "依田太一") after:${dateString} before:${todayString}`;
     Logger.log(`[DEBUG] Search Query Initiated: ${query}`);
 
     // --- Slack検索APIの実行（ページネーション対応） ---
