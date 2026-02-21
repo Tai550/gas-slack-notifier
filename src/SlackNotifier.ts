@@ -33,7 +33,7 @@ function sendSlackNotification(): void {
   if (!webhookUrl) {
     Logger.log(
       `エラー: スクリプトプロパティ "${WEBHOOK_PROPERTY_KEY}" が設定されていません。` +
-        'GASエディタ > プロジェクトの設定 > スクリプトプロパティ から登録してください。',
+      'GASエディタ > プロジェクトの設定 > スクリプトプロパティ から登録してください。',
     );
     return;
   }
@@ -163,4 +163,33 @@ function deleteTriggers(): void {
   });
 
   Logger.log(`🗑️ ${deletedCount} 件の既存トリガーを削除しました。`);
+}
+
+// ============================================================
+// テスト送信
+// ============================================================
+
+/**
+ * #time-yoda チャンネルにテストメッセージを即時送信する。
+ * GASエディタから手動実行して動作確認に使用。
+ */
+function sendTestMessage(): void {
+  const webhookUrl = PropertiesService.getScriptProperties().getProperty(WEBHOOK_PROPERTY_KEY);
+
+  if (!webhookUrl) {
+    Logger.log(
+      `エラー: スクリプトプロパティ "${WEBHOOK_PROPERTY_KEY}" が設定されていません。\n` +
+      'GASエディタ > プロジェクトの設定 > スクリプトプロパティ から登録してください。',
+    );
+    return;
+  }
+
+  const now = new Date().toLocaleString('ja-JP', { timeZone: 'Asia/Tokyo' });
+  const testMessage =
+    '🔔 *テスト通知*\n\n' +
+    'GAS + TypeScript 開発環境からのテスト送信です。\n' +
+    `送信日時: ${now}\n` +
+    'このメッセージが届いていれば、Slack連携は正常に動作しています ✅';
+
+  postToSlack(webhookUrl, testMessage);
 }

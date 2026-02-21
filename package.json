@@ -6,7 +6,8 @@
   "scripts": {
     "lint": "eslint 'src/**/*.ts' --fix",
     "format": "prettier --write 'src/**/*.ts'",
-    "push": "npx @google/clasp push",
+    "build": "tsc && cp src/appsscript.json dist/",
+    "push": "npm run build && npx @google/clasp push",
     "typecheck": "tsc --noEmit"
   },
   "keywords": [],
