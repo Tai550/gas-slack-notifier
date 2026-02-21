@@ -42,15 +42,17 @@ function reportYesterdayMentions(): void {
     const todayString = Utilities.formatDate(today, 'Asia/Tokyo', 'yyyy-MM-dd');
 
     // --- 検索クエリの作成 ---
-    // 精度向上のため "to:<@ID>" ではなく "<@ID>" で検索し、日付を厳密に指定
-    const query = `<@${userId}> after:${dateString} before:${todayString}`;
-    Logger.log(`Search Query: ${query}`);
+    // hit率を高めるため Slack 標準の "to:me" と ID指定を併用したクエリを試行
+    // デバッグのため複数のクエリパターンを試せるように構成（今回は to:me を重視）
+    const query = `to:me after:${dateString} before:${todayString}`;
+    Logger.log(`[DEBUG] Search Query Initiated: ${query}`);
 
     // --- Slack検索APIの実行（ページネーション対応） ---
     const messages = searchSlackMessages(userToken, query);
 
     if (messages.length === 0) {
-        postToSlack(webhookUrl, `昨日（${dateString}）のメンションはありませんでした。☕`);
+        Logger.log('[DEBUG] No messages found for the query.');
+        postToSlack(webhookUrl, `昨日（${dateString}）のメンションは検索で見つかりませんでした。詳細な設定やログを確認してください。☕`);
         return;
     }
 
@@ -60,7 +62,7 @@ function reportYesterdayMentions(): void {
     // --- メッセージの作成 ---
     const reportMessage = [
         `📅 *昨日（${dateString}）のメンション集計*`,
-        `以下のチャンネルでメンションが届いていました：\n`,
+        `以下のチャンネルでメンションが届いていました（合計 ${messages.length} 件）：\n`,
         ...channelList.map((ch) => `• #${ch.name} (<https://slack.com/archives/${ch.id}|開く>)`),
         `\n確認漏れがないかチェックしましょう！🚀`,
     ].join('\n');
@@ -81,6 +83,8 @@ function searchSlackMessages(token: string, query: string): any[] {
     let page = 1;
     let pageCount = 1;
 
+    Logger.log(`[DEBUG] Starting Slack Search with query: ${query}`);
+
     do {
         const url = `https://slack.com/api/search.messages?query=${encodeURIComponent(query)}&count=100&page=${page}`;
         const options: GoogleAppsScript.URL_Fetch.URLFetchRequestOptions = {
@@ -90,25 +94,46 @@ function searchSlackMessages(token: string, query: string): any[] {
         };
 
         const response = UrlFetchApp.fetch(url, options);
-        const resJson = JSON.parse(response.getContentText());
+        const resString = response.getContentText();
+        const resJson = JSON.parse(resString);
 
         if (!resJson.ok) {
-            Logger.log(`Slack API Error: ${resJson.error}`);
+            Logger.log(`[ERROR] Slack API Error: ${resJson.error}`);
+            if (resJson.error === 'invalid_auth') {
+                Logger.log('[ERROR] Token may be invalid or expired.');
+            }
             break;
         }
 
+        // 検索全体のメタ情報を出力
+        if (page === 1) {
+            const totalCount = resJson.messages.pagination.total_count;
+            Logger.log(`[DEBUG] Total hits on Slack: ${totalCount}`);
+        }
+
         const matches = resJson.messages.matches || [];
+        Logger.log(`[DEBUG] Page ${page}: Found ${matches.length} matches.`);
+
+        // デバッグ用：取得メッセージの断片をログ出力
+        if (matches.length > 0) {
+            const sample = matches[0];
+            Logger.log(`[DEBUG] Sample Match - Channel: ${sample.channel.name} (${sample.channel.id}), Text fragment: ${sample.text.substring(0, 30)}...`);
+        }
+
         allMessages = allMessages.concat(matches);
 
         pageCount = resJson.messages.pagination.page_count;
         page++;
 
         // API制限を考慮し、極端に多い場合は5ページ（500件）で切り上げる
-        if (page > 5) break;
+        if (page > 5) {
+            Logger.log('[WARN] Reached maximum page limit (5). Cutting off.');
+            break;
+        }
 
     } while (page <= pageCount);
 
-    Logger.log(`Total mentions found: ${allMessages.length}`);
+    Logger.log(`[DEBUG] Completed search. Total messages collected: ${allMessages.length}`);
     return allMessages;
 }
 
@@ -120,8 +145,8 @@ function aggregateMentions(messages: any[]): { id: string; name: string }[] {
 
     messages.forEach((msg) => {
         if (msg.channel && msg.channel.id) {
-            // チャンネル名が取得できない（プライベートチャンネル等）場合への配慮
-            const channelName = msg.channel.name || 'private-channel';
+            // チャンネル名が伏せられている場合（プライベート等）のフォールバック
+            const channelName = msg.channel.name || `private-channel-${msg.channel.id}`;
             channelMap.set(msg.channel.id, channelName);
         }
     });
