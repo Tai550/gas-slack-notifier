@@ -60,17 +60,25 @@ npm run lint
 npm run typecheck
 ```
 
-### GASへプッシュ
+### GASへプッシュ（ビルドが必要）
+
+本プロジェクトはTypeScriptで書かれているため、プッシュ前にビルド（JSへの変換）を行います。
 
 ```bash
 npm run push
 ```
+*(内部で `npm run build` を実行してからGASへ転送します)*
 
 ### 整形 → プッシュ（一括）
 
 ```bash
 npm run format && npm run push
 ```
+
+## テスト送信（#time-yoda）
+
+コード内に `sendTestMessage` 関数を用意しています。
+GASエディタでこの関数を選択して実行すると、すぐにスプレッドシートを通さず、設定中のSlack Webhook（`SLACK_WEBHOOK_URL_test`）へテスト通知が送られます。連携確認にご利用ください。
 
 ## トリガー設定
 
